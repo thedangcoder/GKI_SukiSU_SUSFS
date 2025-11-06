@@ -37,16 +37,15 @@ on:
         required: true
         type: boolean
         default: false
-      build_a16_510:
-        description: "Build a16 5.10?"
+      build_a16:
+        description: "Build Android 16"
         required: true
-        type: boolean
-        default: false
-      build_a16_612:
-        description: "Build a16 6.12?"
-        required: true
-        type: boolean
-        default: false
+        type: choice
+        options:
+          - "none"
+          - "5.10"
+          - "6.12"
+        default: "none"
       make_release:
         description: "Do you want to create a release?"
         required: true
@@ -136,7 +135,7 @@ jobs:
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
   build-kernel-a16-5-10:
-    if: ${{ inputs.build_a16_510 }}
+    if: ${{ inputs.build_a16 == '5.10' }}
     uses: ./.github/workflows/kernel-a16-5.10.yml
     secrets: inherit
     with:
@@ -146,7 +145,7 @@ jobs:
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
   build-kernel-a16-6-12:
-    if: ${{ inputs.build_a16_612 }}
+    if: ${{ inputs.build_a16 == '6.12' }}
     uses: ./.github/workflows/kernel-a16-6.12.yml
     secrets: inherit
     with:
