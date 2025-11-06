@@ -135,7 +135,13 @@ jobs:
           echo "Cloning AnyKernel3 and other dependencies..."
 
           # Define the branch names using the inputs values
-          SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
+          # For Android 16 with kernel 5.10, use Android 13's SUSFS branch
+          if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
+            SUSFS_BRANCH="gki-android13-5.10"
+            echo "Using Android 13 SUSFS branch for Android 16 with kernel 5.10"
+          else
+            SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
+          fi
 
           # Debug print the branches
           echo "Using branch for SUSFS: $SUSFS_BRANCH"

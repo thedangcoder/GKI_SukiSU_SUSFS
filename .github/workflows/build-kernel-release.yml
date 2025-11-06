@@ -33,7 +33,17 @@ on:
         type: boolean
         default: true
       build_a15_66:
-        description: "Build a15  6.6?"
+        description: "Build a15 6.6?"
+        required: true
+        type: boolean
+        default: false
+      build_a16_510:
+        description: "Build a16 5.10?"
+        required: true
+        type: boolean
+        default: false
+      build_a16_612:
+        description: "Build a16 6.12?"
         required: true
         type: boolean
         default: false
@@ -125,6 +135,26 @@ jobs:
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
+  build-kernel-a16-5-10:
+    if: ${{ inputs.build_a16_510 }}
+    uses: ./.github/workflows/kernel-a16-5.10.yml
+    secrets: inherit
+    with:
+      make_release: ${{ inputs.make_release }}
+      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_branch: ${{ inputs.kernelsu_branch }}
+      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+
+  build-kernel-a16-6-12:
+    if: ${{ inputs.build_a16_612 }}
+    uses: ./.github/workflows/kernel-a16-6.12.yml
+    secrets: inherit
+    with:
+      make_release: ${{ inputs.make_release }}
+      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_branch: ${{ inputs.kernelsu_branch }}
+      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+
   trigger-release:
     runs-on: ubuntu-latest
     permissions:
@@ -137,6 +167,8 @@ jobs:
       - build-kernel-a14-5-15
       - build-kernel-a14-6-1
       - build-kernel-a15-6-6
+      - build-kernel-a16-5-10
+      - build-kernel-a16-6-12
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: MiRinFork
