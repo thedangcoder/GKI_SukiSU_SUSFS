@@ -1,3 +1,5 @@
+## 🇻🇳 Tiếng Việt | Vietnamese
+
 # GKI Kernel 5.10.245 + KernelSU + SUSFS cho Evolution X
 
 ## 🚀 Build Tự Động với GitHub Actions
