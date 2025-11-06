@@ -51,13 +51,6 @@ on:
         required: true
         type: boolean
         default: true
-      kernelsu_variant:
-        description: "Choose KernelSU"
-        required: true
-        type: choice
-        options:
-          - SukiSU
-        default: SukiSU
       kernelsu_branch:
         description: "Choose ksu branch"
         required: true
@@ -80,7 +73,7 @@ jobs:
     secrets: inherit
     with:
       make_release: ${{ inputs.make_release }}
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "SukiSU"
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
@@ -90,7 +83,7 @@ jobs:
     secrets: inherit
     with:
       make_release: ${{ inputs.make_release }}
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "SukiSU"
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
@@ -100,7 +93,7 @@ jobs:
     secrets: inherit
     with:
       make_release: ${{ inputs.make_release }}
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "SukiSU"
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
@@ -110,7 +103,7 @@ jobs:
     secrets: inherit
     with:
       make_release: ${{ inputs.make_release }}
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "SukiSU"
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
@@ -120,7 +113,7 @@ jobs:
     secrets: inherit
     with:
       make_release: ${{ inputs.make_release }}
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "SukiSU"
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
@@ -130,7 +123,7 @@ jobs:
     secrets: inherit
     with:
       make_release: ${{ inputs.make_release }}
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "SukiSU"
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
@@ -140,7 +133,7 @@ jobs:
     secrets: inherit
     with:
       make_release: ${{ inputs.make_release }}
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "SukiSU"
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
@@ -150,7 +143,7 @@ jobs:
     secrets: inherit
     with:
       make_release: ${{ inputs.make_release }}
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "SukiSU"
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
@@ -179,7 +172,7 @@ jobs:
         > Take your own risk! Nobody tested. `fastboot boot` bofore flash it.
 
         Features:
-        - ${{ inputs.kernelsu_variant }} (${{ inputs.kernelsu_branch }})
+        - SukiSU (${{ inputs.kernelsu_branch }})
         - **ඞ** SUSFS
         - Manual Syscall Hooks
         - Wireguard Support
@@ -207,33 +200,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Determine the branch for KernelSU-${{ inputs.kernelsu_variant }}
-        if: ${{ inputs.kernelsu_branch == 'Dev' || inputs.kernelsu_variant == 'SukiSU' }}
+      - name: Determine the branch for KernelSU-SukiSU
+        if: ${{ inputs.kernelsu_branch == 'Dev' }}
         run: |
           # Determine the branch based on user input
-          if [[ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]]; then
-            BRANCH="main"
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Other" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
+          BRANCH="main"
+          if [[ "${{ inputs.kernelsu_branch }}" == "Other" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
             BRANCH="${{ inputs.kernelsu_branch_other }}"
-          else
-            echo "Error: Custom branch not provided for 'Other'" >&2
-            exit 1
-          fi
-
           # Store the selected branch in GITHUB_ENV
           echo "KSU_BRANCH=$BRANCH" >> $GITHUB_ENV
 
-      - name: Get commit hash or tag and generate URL for KernelSU-${{ inputs.kernelsu_variant }}
+      - name: Get commit hash or tag and generate URL for KernelSU-SukiSU
         run: |
-          if [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
-            echo "This is the SukiSU variant"
-            REPO_URL="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"
-            REPO_URL2="SukiSU-Ultra/SukiSU-Ultra"
-          else
-            echo "Unknown variant"
-          fi
+          echo "This is the SukiSU variant"
+          REPO_URL="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"
+          REPO_URL2="SukiSU-Ultra/SukiSU-Ultra"
 
-          if [[ "${{ inputs.kernelsu_branch }}" == "Stable" && "${{ inputs.kernelsu_variant }}" != "SukiSU" ]]; then
+          if [[ "${{ inputs.kernelsu_branch }}" == "Stable" ]]; then
             # Fetch the latest tag
             TAG=$(git ls-remote --tags --sort=-v:refname $REPO_URL | grep -o 'refs/tags/.*' | cut -d'/' -f3 | head -n1)
             if [[ -z "$TAG" ]]; then
@@ -243,7 +226,7 @@ jobs:
             KSU_REF=$TAG
             KSU_URL="https://github.com/$REPO_URL2/releases/tag/$TAG"
 
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev" || "${{ inputs.kernelsu_variant }}" == "SukiSU" ]]; then
+          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev" ]]; then
             # Fetch the latest commit from "next" branch
             COMMIT_HASH=$(git ls-remote $REPO_URL refs/heads/$KSU_BRANCH | awk '{ print $1 }')
             if [[ -z "$COMMIT_HASH" ]]; then
@@ -301,16 +284,12 @@ jobs:
 
       - name: Append Commit Hashes & Links to `RELEASE_NOTES` & Append KernelSU-Next Reference to `RELEASE_NOTES`
         run: |
-          if [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
-            echo "This is the SukiSU variant"
-            echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-            echo "$RELEASE_NOTES" >> $GITHUB_ENV
-            echo "SukiSU Ultra Manager:" >> $GITHUB_ENV
-            echo "- https://github.com/SukiSU-Ultra/SukiSU-Ultra" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
-          else
-            echo "Unknown variant"
-          fi
+          echo "This is the SukiSU variant"
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "$RELEASE_NOTES" >> $GITHUB_ENV
+          echo "SukiSU Ultra Manager:" >> $GITHUB_ENV
+          echo "- https://github.com/SukiSU-Ultra/SukiSU-Ultra" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Append Commit Hashes & Links to `RELEASE_NOTES` & Append KernelSU-Next Reference to `RELEASE_NOTES`
         run: |
@@ -322,7 +301,7 @@ jobs:
           echo "<summary>Commit Hashes and Links</summary>" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           echo "- KernelSU:" >> $GITHUB_ENV
-          echo "  - ${{ inputs.kernelsu_variant }}-${{ inputs.kernelsu_branch }}: [$KSU_REF]($KSU_URL)" >> $GITHUB_ENV
+          echo "  - SukiSU-${{ inputs.kernelsu_branch }}: [$KSU_REF]($KSU_URL)" >> $GITHUB_ENV
           echo "- SUSFS4KSU:" >> $GITHUB_ENV
           echo "  - gki-android12-5.10: [$COMMIT_HASH_gki_android12_5_10]($COMMIT_URL_gki_android12_5_10)" >> $GITHUB_ENV
           echo "  - gki-android13-5.10: [$COMMIT_HASH_gki_android13_5_10]($COMMIT_URL_gki_android13_5_10)" >> $GITHUB_ENV
