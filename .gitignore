@@ -1,0 +1,42 @@
+# Build outputs
+build_output/
+downloads/
+*.zip
+*.ko
+*.img
+Image
+Image.gz
+
+# Kernel build artifacts
+out/
+kernel_workspace/
+*.o
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+
+# AnyKernel3
+AnyKernel3/
+*.zip
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+

@@ -1,0 +1,223 @@
+name: Build KernelSU LKM (Fast Build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: 'Kernel Version'
+        required: true
+        default: '5.10.245'
+        type: string
+      tag:
+        description: 'Release Tag (optional)'
+        required: false
+        type: string
+
+jobs:
+  build-lkm:
+    name: Build KernelSU LKM Module
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Build Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          bc \
+          bison \
+          flex \
+          libssl-dev \
+          libelf-dev \
+          git \
+          curl \
+          wget \
+          zip \
+          cpio \
+          kmod
+        
+    - name: Setup Repo Tool
+      run: |
+        mkdir -p ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        echo "$HOME/bin" >> $GITHUB_PATH
+        
+    - name: Configure Git
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git config --global color.ui false
+        
+    - name: Download GKI Kernel Headers
+      run: |
+        mkdir -p kernel_workspace
+        cd kernel_workspace
+        repo init --depth=1 -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10-${{ inputs.kernel_version }}
+        repo sync -c -j$(nproc --all) --no-clone-bundle --no-tags
+        
+    - name: Build Kernel Headers
+      run: |
+        cd kernel_workspace
+        LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh headers
+        
+    - name: Clone KernelSU
+      run: |
+        cd kernel_workspace
+        git clone https://github.com/tiann/KernelSU.git --depth=1
+        
+    - name: Build KernelSU LKM
+      run: |
+        cd kernel_workspace/KernelSU/kernel
+        make -j$(nproc --all) KERNEL_DIR=../../out/android12-5.10/common kernelsu.ko
+        
+    - name: Clone SUSFS
+      run: |
+        cd kernel_workspace
+        git clone https://gitlab.com/simonpunk/susfs4ksu.git --depth=1 -b gki-android12-5.10
+        
+    - name: Build SUSFS Module
+      run: |
+        cd kernel_workspace/susfs4ksu/ksu_module_susfs
+        make -j$(nproc --all) KERNEL_DIR=../../out/android12-5.10/common
+        
+    - name: Prepare Release Package
+      run: |
+        cd kernel_workspace
+        mkdir -p release_package
+        
+        # Copy KernelSU LKM
+        if [ -f "KernelSU/kernel/kernelsu.ko" ]; then
+          cp KernelSU/kernel/kernelsu.ko release_package/
+        fi
+        
+        # Copy SUSFS module if exists
+        if [ -f "susfs4ksu/ksu_module_susfs/ksu_susfs.ko" ]; then
+          cp susfs4ksu/ksu_module_susfs/ksu_susfs.ko release_package/
+        fi
+        
+        # Create installation script
+        cat > release_package/install.sh << 'EOF'
+        #!/system/bin/sh
+        
+        echo "Installing KernelSU LKM + SUSFS for Evolution X"
+        echo "Kernel Version: 5.10.245-gki"
+        
+        MODULE_PATH="/data/adb/modules"
+        KERNELSU_PATH="/data/adb/ksu"
+        
+        # Create directories
+        mkdir -p "$KERNELSU_PATH/modules"
+        
+        # Install KernelSU module
+        if [ -f "kernelsu.ko" ]; then
+          echo "Installing KernelSU LKM..."
+          cp kernelsu.ko "$KERNELSU_PATH/modules/"
+          chmod 644 "$KERNELSU_PATH/modules/kernelsu.ko"
+          insmod "$KERNELSU_PATH/modules/kernelsu.ko"
+          echo "KernelSU LKM installed successfully"
+        fi
+        
+        # Install SUSFS module
+        if [ -f "ksu_susfs.ko" ]; then
+          echo "Installing SUSFS module..."
+          cp ksu_susfs.ko "$KERNELSU_PATH/modules/"
+          chmod 644 "$KERNELSU_PATH/modules/ksu_susfs.ko"
+          insmod "$KERNELSU_PATH/modules/ksu_susfs.ko"
+          echo "SUSFS module installed successfully"
+        fi
+        
+        echo "Installation completed!"
+        echo "Please reboot your device."
+        EOF
+        
+        chmod +x release_package/install.sh
+        
+        # Create README
+        cat > release_package/README.txt << 'EOF'
+        KernelSU LKM + SUSFS for Evolution X
+        =====================================
+        
+        Kernel Version: 5.10.245-gki
+        Build Date: $(date)
+        
+        Installation:
+        1. Flash this zip via Magisk/KernelSU Manager or custom recovery
+        2. Or run install.sh manually via root shell
+        3. Reboot device
+        
+        Requirements:
+        - Android 12+ with GKI kernel 5.10.245
+        - Evolution X ROM or compatible GKI ROM
+        - Root access
+        
+        Important Notes:
+        - Make sure to disable "Global Umount" in KernelSU settings
+        - This is LKM (Loadable Kernel Module) version
+        - Compatible with stock kernel without recompilation
+        
+        Troubleshooting:
+        - If bootloop occurs, flash stock boot.img
+        - Check dmesg logs for module loading errors
+        
+        EOF
+        
+        # Create Magisk module structure
+        cat > release_package/module.prop << 'EOF'
+        id=kernelsu_lkm_susfs
+        name=KernelSU LKM + SUSFS
+        version=5.10.245
+        versionCode=51024500
+        author=GKI_SukiSU_SUSFS
+        description=KernelSU Loadable Kernel Module with SUSFS support for Evolution X
+        EOF
+        
+        # Create zip package
+        cd release_package
+        zip -r9 ../KernelSU-LKM-SUSFS-5.10.245-$(date +%Y%m%d-%H%M).zip * -x .git
+        
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: KernelSU-LKM-SUSFS-5.10.245
+        path: kernel_workspace/KernelSU-LKM-*.zip
+        
+    - name: Create Release
+      if: inputs.tag != ''
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ inputs.tag }}
+        name: KernelSU LKM + SUSFS v${{ inputs.tag }}
+        body: |
+          ## KernelSU LKM + SUSFS for Evolution X
+          
+          **Kernel Version:** 5.10.245-gki
+          **Build Date:** ${{ github.event.repository.updated_at }}
+          
+          ### Features
+          - ✅ KernelSU Loadable Kernel Module (LKM)
+          - ✅ SUSFS (SU File System) support
+          - ✅ Compatible with Evolution X ROM
+          - ✅ No kernel recompilation needed
+          
+          ### Installation
+          1. Download the zip file
+          2. Flash via Magisk/KernelSU Manager
+          3. Reboot device
+          
+          ### Important Notes
+          ⚠️ Disable "Global Umount" in KernelSU settings before installation
+          
+          ### Compatibility
+          - Android 12+
+          - GKI kernel 5.10.245
+          - Evolution X or compatible GKI ROMs
+        files: kernel_workspace/KernelSU-LKM-*.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

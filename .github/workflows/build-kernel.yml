@@ -1,0 +1,202 @@
+name: Build GKI Kernel 5.10.245 for Evolution X
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: 'Kernel Version'
+        required: true
+        default: '5.10.245'
+        type: string
+      kernelsu_version:
+        description: 'KernelSU Version'
+        required: true
+        default: 'main'
+        type: string
+      susfs_version:
+        description: 'SUSFS Version'
+        required: true
+        default: 'gki-android12-5.10'
+        type: string
+      build_lkm:
+        description: 'Build KernelSU LKM'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  build:
+    name: Build Kernel
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Build Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          bc \
+          bison \
+          flex \
+          libssl-dev \
+          libelf-dev \
+          git \
+          curl \
+          wget \
+          zip \
+          python3 \
+          python3-pip \
+          cpio \
+          kmod
+        
+    - name: Setup Repo Tool
+      run: |
+        mkdir -p ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        echo "$HOME/bin" >> $GITHUB_PATH
+        
+    - name: Configure Git
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git config --global color.ui false
+        
+    - name: Download GKI Kernel Source
+      run: |
+        mkdir -p kernel_workspace
+        cd kernel_workspace
+        repo init --depth=1 -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10-${{ inputs.kernel_version }}
+        repo sync -c -j$(nproc --all) --no-clone-bundle --no-tags
+        
+    - name: Clone KernelSU
+      run: |
+        cd kernel_workspace/common
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s ${{ inputs.kernelsu_version }}
+        
+    - name: Clone SUSFS
+      run: |
+        cd kernel_workspace/common
+        git clone https://gitlab.com/simonpunk/susfs4ksu.git -b ${{ inputs.susfs_version }} drivers/kernelsu/susfs
+        
+    - name: Apply SUSFS Patches
+      run: |
+        cd kernel_workspace/common
+        # Apply SUSFS kernel patches
+        if [ -d "drivers/kernelsu/susfs" ]; then
+          echo "Applying SUSFS patches..."
+          for patch in drivers/kernelsu/susfs/kernel_patches/*.patch; do
+            if [ -f "$patch" ]; then
+              echo "Applying patch: $patch"
+              patch -p1 < "$patch" || echo "Warning: Patch $patch failed, continuing..."
+            fi
+          done
+        fi
+        
+    - name: Configure Kernel for Evolution X
+      run: |
+        cd kernel_workspace/common
+        # Enable KernelSU config
+        echo "CONFIG_KSU=y" >> arch/arm64/configs/gki_defconfig
+        echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/gki_defconfig
+        
+        # Evolution X specific optimizations
+        cat >> arch/arm64/configs/gki_defconfig << EOF
+        # Evolution X Optimizations
+        CONFIG_HZ_300=y
+        CONFIG_ANDROID_PARANOID_NETWORK=y
+        CONFIG_WIREGUARD=y
+        EOF
+        
+    - name: Build Kernel
+      run: |
+        cd kernel_workspace
+        LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
+        
+    - name: Prepare AnyKernel3
+      run: |
+        cd kernel_workspace
+        git clone https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+        cd AnyKernel3
+        rm -rf .git
+        
+        # Configure AnyKernel3 for GKI
+        cat > anykernel.sh << 'EOF'
+        # AnyKernel3 Ramdisk Mod Script
+        # osm0sis @ xda-developers
+        
+        properties() { '
+        kernel.string=GKI Kernel 5.10.245 + KernelSU + SUSFS for Evolution X
+        do.devicecheck=0
+        do.modules=1
+        do.systemless=1
+        do.cleanup=1
+        do.cleanuponabort=0
+        device.name1=
+        supported.versions=12-14
+        supported.patchlevels=
+        '; }
+        
+        block=boot;
+        is_slot_device=auto;
+        ramdisk_compression=auto;
+        patch_vbmeta_flag=auto;
+        
+        . tools/ak3-core.sh;
+        
+        ## AnyKernel install
+        split_boot;
+        
+        flash_boot;
+        flash_dtbo;
+        ## end install
+        
+        EOF
+        
+    - name: Package Kernel
+      run: |
+        cd kernel_workspace
+        
+        # Copy kernel image
+        if [ -f "out/android12-5.10/dist/Image" ]; then
+          cp out/android12-5.10/dist/Image AnyKernel3/
+        elif [ -f "out/mixed/dist/Image" ]; then
+          cp out/mixed/dist/Image AnyKernel3/
+        fi
+        
+        # Copy kernel image.gz if exists
+        if [ -f "out/android12-5.10/dist/Image.gz" ]; then
+          cp out/android12-5.10/dist/Image.gz AnyKernel3/
+        elif [ -f "out/mixed/dist/Image.gz" ]; then
+          cp out/mixed/dist/Image.gz AnyKernel3/
+        fi
+        
+        # Copy modules if exists
+        mkdir -p AnyKernel3/modules/vendor/lib/modules
+        if [ -d "out/android12-5.10/dist" ]; then
+          find out/android12-5.10/dist -name "*.ko" -exec cp {} AnyKernel3/modules/vendor/lib/modules/ \;
+        elif [ -d "out/mixed/dist" ]; then
+          find out/mixed/dist -name "*.ko" -exec cp {} AnyKernel3/modules/vendor/lib/modules/ \;
+        fi
+        
+        # Create flashable zip
+        cd AnyKernel3
+        zip -r9 ../GKI-5.10.245-KernelSU-SUSFS-EvolutionX-$(date +%Y%m%d-%H%M).zip * -x .git README.md *placeholder
+        
+    - name: Upload Kernel
+      uses: actions/upload-artifact@v4
+      with:
+        name: GKI-5.10.245-KernelSU-SUSFS-EvolutionX
+        path: kernel_workspace/GKI-*.zip
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: kernel_workspace/GKI-*.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
