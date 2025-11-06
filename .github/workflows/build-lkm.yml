@@ -62,7 +62,7 @@ jobs:
     - name: Build Kernel Headers
       run: |
         cd kernel_workspace
-        LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh headers
+        LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
         
     - name: Clone KernelSU
       run: |
@@ -71,8 +71,21 @@ jobs:
         
     - name: Build KernelSU LKM
       run: |
-        cd kernel_workspace/KernelSU/kernel
-        make -j$(nproc --all) KERNEL_DIR=../../out/android12-5.10/common kernelsu.ko
+        cd kernel_workspace
+        # Find the actual kernel output directory
+        if [ -d "out/mixed/common" ]; then
+          KDIR="$(pwd)/out/mixed/common"
+        elif [ -d "out/android12-5.10/common" ]; then
+          KDIR="$(pwd)/out/android12-5.10/common"
+        else
+          echo "Error: Cannot find kernel output directory"
+          find out -name "Module.symvers" -type f
+          exit 1
+        fi
+        
+        echo "Using KERNEL_DIR: $KDIR"
+        cd KernelSU/kernel
+        make -j$(nproc --all) KDIR="$KDIR" LLVM=1
         
     - name: Clone SUSFS
       run: |
@@ -81,8 +94,20 @@ jobs:
         
     - name: Build SUSFS Module
       run: |
-        cd kernel_workspace/susfs4ksu/ksu_module_susfs
-        make -j$(nproc --all) KERNEL_DIR=../../out/android12-5.10/common
+        cd kernel_workspace
+        # Find the actual kernel output directory
+        if [ -d "out/mixed/common" ]; then
+          KDIR="$(pwd)/out/mixed/common"
+        elif [ -d "out/android12-5.10/common" ]; then
+          KDIR="$(pwd)/out/android12-5.10/common"
+        else
+          echo "Error: Cannot find kernel output directory"
+          exit 1
+        fi
+        
+        echo "Using KERNEL_DIR: $KDIR"
+        cd susfs4ksu/ksu_module_susfs
+        make -j$(nproc --all) KDIR="$KDIR" LLVM=1
         
     - name: Prepare Release Package
       run: |
